@@ -39,7 +39,7 @@ class NearField():
 				ScenarioName,
 				DischageDepth=None,
 				RefDepth=1000,
-				Concentration=False,):
+				Concentration=False):
 
 		if Concentration:
 			self._Property='C'
@@ -88,8 +88,7 @@ class NearField():
 		df.index=ceil(df.index*100.)/10.
 		df=df.groupby(df.index).first()
 		N=int(ceil(df.index[-1]))+1
-		#df = df.reindex(arange(0,N,0.1)).interpolate(method='slinear')
-		df = df.reindex(arange(0,N,0.1)).interpolate(method='spline')
+		df = df.reindex(arange(0,N,0.1)).interpolate(method='slinear')
 		df.dropna(inplace=True)
 		return df
 
@@ -285,7 +284,7 @@ class NearField():
 			xzdif = (xdist-zdist)/2
 			zmin-=xzdif
 			zmax+=xzdif
-			if zmin<-5
+			if zmin<-5:
 				zbase=zmin+5
 				zmin-=zbase
 				zmax+=zbase
@@ -297,7 +296,7 @@ class NearField():
 			xydif = (zdist-ydist)/2
 			ymin-=xydif
 			ymax+=xydif
-			
+
 		elif ydist >= xdist > zdist:
 			xydif = (ydist-xdist)/2
 			xmin-=xydif
@@ -306,7 +305,7 @@ class NearField():
 			yzdif = (ydist-zdist)/2
 			zmin-=yzdif
 			zmax+=yzdif
-			if zmin<-5
+			if zmin<-5:
 				zbase=zmin+5
 				zmin-=zbase
 				zmax+=zbase
