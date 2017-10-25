@@ -1,11 +1,18 @@
 
 from glob import glob
-from numpy import arange,ceil,abs,diff,pi,arctan2,sin,cos,append
+from numpy import arange,ceil,abs,diff,pi,arctan2,sin,cos,append,max,min
 from pandas import concat, read_csv
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.tri import Triangulation, TriAnalyzer, UniformTriRefiner
 from TTutils.Utils import WindowFilter
+from scipy import signal
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import axes3d
+from PIL import Image
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from TTutils.logo import *
 
 sns.set_style("whitegrid", {
 	                         'grid.color'    : ".5",
@@ -81,7 +88,8 @@ class NearField():
 		df.index=ceil(df.index*100.)/10.
 		df=df.groupby(df.index).first()
 		N=int(ceil(df.index[-1]))+1
-		df = df.reindex(arange(0,N,0.1)).interpolate(method='slinear')
+		#df = df.reindex(arange(0,N,0.1)).interpolate(method='slinear')
+		df = df.reindex(arange(0,N,0.1)).interpolate(method='spline')
 		df.dropna(inplace=True)
 		return df
 
@@ -126,6 +134,14 @@ class NearField():
 
 		return df
 
+	@staticmethod
+	def ToFloat(df):
+
+		for col in df.columns:
+			df.loc[:,col]=df.loc[:,col].astype(float)
+		df.index=df.index.astype(float)
+		return df
+
 	def ReadNearFieldFiles(self,**kwargs):
 
 		nf=[]
@@ -138,6 +154,7 @@ class NearField():
 				.pipe(self.AdjustB)
 				.pipe(self.AdjustTime)
 				.pipe(self.RemoveUcBo)
+				.pipe(self.ToFloat)
 			)
 
 		df = concat(nf)
@@ -215,21 +232,132 @@ class NearField():
 		else:
 			return axis
 
-	# def Plot3D(self,fname,angle,resolution):
-	#
-	#
-	# 	filter = signal.get_window(('gaussian',25))
-	# 	GridDissolution,_ = np.meshgrid(df_interp['C'],filter)
-	# 	# espacial
-	# 	# grid x e y
-	# 	GridX,_ = np.meshgrid(df_interp['X'],filter)
-	# 	GridY,_ = np.meshgrid(df_interp['Y'],filter)
-	# 	GridZ,_= np.meshgrid(df_interp['Z'],filter)
-	# 	thetagrid = np.linspace(0,2*np.pi,len(filter))
-	# 	for i in range(resolution):
-	# 		grid_x[:,i]= np.sin(thetagrid)*(df_interp['bx_pos'][i]-df_interp[xlabel][i])+df_interp[xlabel][i]
-	# 		grid_y[:,i]= np.sin(thetagrid)*(df_interp['by_pos'][i]-df_interp[ylabel][i])+df_interp[ylabel][i]
-	# 		grid_z[:,i]=np.cos(thetagrid)*(df_interp['bv_pos'][i]-df_interp[zlabel][i])+df_interp[zlabel][i]
-	# 	center = int(resolution/2)
-	# 	# retorna todas as grades
-	# 	return grid_x,grid_y,grid_z,grid_dissolution
+	def Plot3D(self,
+				fname=None,
+				angle1=30,
+				angle2=150,
+				LongInterp=1000,
+				LateralInterp=25):
+
+		n=self.df.shape[0]
+
+		idx = list(np.linspace(0,n-1,LongInterp))
+		idx = list(map(int,idx))
+		PlotDF=self.df.iloc[idx,:]
+		PlotDF['X'].iloc[0]=0
+		PlotDF['Y'].iloc[0]=0
+		PlotDF['BV'].iloc[0]=0
+		PlotDF['BX'].iloc[0]=0
+		PlotDF['BY'].iloc[0]=0
+
+		filter = signal.get_window(('gaussian',LateralInterp),LateralInterp)
+
+		GridX,_ = np.meshgrid(PlotDF['X'],filter)
+		GridY,_ = np.meshgrid(PlotDF['Y'],filter)
+		GridZ,_= np.meshgrid(PlotDF['Z'],filter)
+		thetagrid = np.linspace(0,np.pi*2,len(filter))
+		GridDissolution,_ = np.meshgrid(PlotDF[self._Property],filter)
+
+		for i in range(GridX.shape[1]):
+		    GridX[:,i]+= np.cos(thetagrid)*(PlotDF.loc[:,'BX'].iloc[i])
+		    GridY[:,i]+= np.cos(thetagrid)*(PlotDF.loc[:,'BY'].iloc[i])
+		    GridZ[:,i]+=np.sin(thetagrid)*(PlotDF.loc[:,'BV'].iloc[i])
+
+		xmax = max(GridX)
+		ymax = max(GridY)
+		zmax = max(GridZ)
+		xmin = min(GridX)
+		ymin = min(GridY)
+		zmin = min(GridZ)
+
+		if zmin<3:
+			zmin=-5
+
+		xdist = xmax-xmin
+		ydist = ymax-ymin
+		zdist = zmax-zmin
+
+		if xdist >= ydist > zdist:
+			xydif = (xdist-ydist)/2
+			ymin-=xydif
+			ymax+=xydif
+
+			xzdif = (xdist-zdist)/2
+			zmin-=xzdif
+			zmax+=xzdif
+			if zmin<-5
+				zbase=zmin+5
+				zmin-=zbase
+				zmax+=zbase
+
+		elif xdist <= ydist < zdist:
+			xydif = (zdist-xdist)/2
+			xmin-=xydif
+			xmax+=xydif
+			xydif = (zdist-ydist)/2
+			ymin-=xydif
+			ymax+=xydif
+			
+		elif ydist >= xdist > zdist:
+			xydif = (ydist-xdist)/2
+			xmin-=xydif
+			xmax+=xydif
+
+			yzdif = (ydist-zdist)/2
+			zmin-=yzdif
+			zmax+=yzdif
+			if zmin<-5
+				zbase=zmin+5
+				zmin-=zbase
+				zmax+=zbase
+
+
+
+
+
+
+		GridZ[GridZ<0]=0
+		n=GridDissolution/GridDissolution.max()
+		vmax=GridDissolution.max()
+
+		fig = plt.figure()
+		ax = fig.add_subplot(111,
+							projection='3d',
+							)
+
+		surf = ax.plot_surface(GridX,
+		                       GridY,
+		                       GridZ,
+		                       facecolors=plt.cm.jet_r(n),
+		                       linewidth=0.5,
+		                       rstride=1,
+		                       cstride=1,
+		                       antialiased=False,
+		                       shade=False,
+		                       vmin=0,
+		                       vmax=vmax
+		                        )
+		ax.invert_zaxis()
+		m = plt.cm.ScalarMappable(cmap=plt.cm.jet_r)
+		m.set_clim(0,vmax)
+		m.set_array(GridDissolution)
+		cbar  = plt.colorbar(m,pad=0.1)
+		cbar.set_clim(0,vmax)
+		cbar.set_label(U'diluição (vezes)',fontsize=8)
+		cbar.set_ticklabels(list(map(str,list(np.arange(0,1,0.1)*int(vmax)))))
+		ax.set_xlabel(u'direção paralela \n a corrente (m)',fontsize=8)
+		ax.set_ylabel(u'direção perpendicular \n a corrente (m)',fontsize=8)
+		ax.set_zlabel(u'profundidade (m)',fontsize=8,rotation=0)
+		ax.view_init(angle1, angle2)
+
+		ax.auto_scale_xyz([xmin, xmax], [ymin, ymax], [zmin, 75])
+
+		a = plt.axes([.02, .02, .15, .15], facecolor='None')
+		im = plt.imshow(np.array(Image.open(GetLogo())))
+		plt.axis('off')
+		plt.setp(a, xticks=[], yticks=[])
+		if not fname:
+			plt.show()
+		else:
+			fig.savefig(fname+'_3dplot.png',dpi=300)
+		plt.close(fig)
