@@ -16,18 +16,41 @@ class Products():
         self.Company='PETROBRAS'
         self.Basin='BSant'
 
+        self.today = datetime.today().strftime('%Y_%m_%d')
+        self.year = str(int(datetime.today().strftime('%Y'))+20)
+        self.Tt = 'TetraTech'
+
         self.EfluentType = {
             'Efl_AgProd':'EFLUENTE DE ÁGUA PRODUZIDA - VAZÃO CORRESPONDENTE À CAPACIDADE DE TRATAMENTO DA UNIDADE;',
             'Efl_AgProd80':'EFLUENTE DE ÁGUA PRODUZIDA - VAZÃO CORRESPONDENTE À 80% DA CAPACIDADE DE TRATAMENTO DA UNIDADE;',
-            'Efl_AgProd2037':'EFLUENTE DE ÁGUA PRODUZIDA - VAZÃO CORRESPONDENTE À GERAÇÃO ESTIMADA PARA 2037;',
+            'Efl_AgProd'+self.year:'EFLUENTE DE ÁGUA PRODUZIDA - VAZÃO CORRESPONDENTE À GERAÇÃO ESTIMADA PARA '+self.year,
             'Efl_SLOP':'EFLUENTE DE DESCARTE VIA TANQUE SLOP;',
+            'Efl_Overboard':'EFLUENTE DE DESCARTE POR OVERBOARD;',
             'Efl_URS':'EFLUENTE DE DESCARTE DA URS;',
             }
 
 
+        DirsNames = ['A_Documentos','B_Ilustracoes','C_Shapes']
+        for prop in DirsNames:
+            setattr(self,prop[2:],os.path.join(self.path,'Produtos/'+prop))
 
     def SetProtocolNumber(self,ProtocolNumber):
         self.ProtocolNumber=ProtocolNumber
+        return self
+
+    def SetPrefix(self,prefix=None):
+        if not prefix:
+            self.prefix='_'.join([
+                            self.Company,
+                            self.ProtocolNumber,
+                            self.Basin,
+                            self.Tt,self.today,
+                            self.PointName,
+                            'Efl'
+                            ])
+        else:
+            self.prefix=prefix
+
         return self
 
     def SetCompanyName(self,Company):
@@ -61,33 +84,48 @@ class Products():
 
     def CreateReadme(self,path):
         today = datetime.today().strftime('%d/%m/%Y')
+        f=open(self.Shapes+'/leiame.txt','w+')
         f.write('Leia-me.txt TetraTech '+today)
         f.write('\r\n---------------------------------------------------------------------------')
         f.write('\r\n')
+        f.write('\r\n')
         f.write('A Pasta SHAPES é composta por subpastas:')
         f.write('\r\n')
+        f.write('\r\n')
 
-        dirs = [os.path.normpath(i).split(os.sep)[-1] for i in glob(self.Shapes+'*/*/')]
+        dirs = [os.path.normpath(i).split(os.sep)[-1] for i in glob(self.Shapes+'**/*/*/',recursive=True)]
+        dirs=list(set(dirs))
+        dirs.sort()
 
-        fnames = [os.path.split(ff)[-1] for ff in glob(self.Shapes+'**/*.shp',recursive=True)]
+        fnames = [os.path.split(ff)[-1] for ff in glob(self.Shapes+'/**/*.shp',recursive=True)]
         fname = fnames[0]
 
-        keys=['_'.join(ff.replace(self.prefix+'_','').split('_')[:2]) for ff in fnames]
-
+        keys=['_'.join(ff.replace(self.prefix[:-3],'').split('_')[:2]) for ff in fnames]
+        keys=list(set(keys))
+        keys.sort()
         f.write('- PROBABILISTICOS:')
         f.write('\r\n')
-        for d in dirs
+        f.write('\r\n')
+        for d in dirs:
             f.write('		- {}:\r\n'.format(d))
+        f.write('\r\n')
         f.write('- DETERMINISTICOS:')
         f.write('\r\n')
-        for d in dirs
-            f.write('		- {}:\r\n'.format(d))
+        f.write('\r\n')
 
+        for d in dirs:
+            f.write('		- {}:\r\n'.format(d))
+        f.write('\r\n')
         f.write('- e um arquivo leia_me.txt\r\n')
+        f.write('\r\n')
         f.write('Os arquivos nestas subpasta são entitulados:\r\n')
+        f.write('\r\n')
         f.write('Exemplos:\r\n')
+        f.write('\r\n')
         f.write('EX.1 - PROBABILISTICOS: "{}"\r\n'.format(fname))
+        f.write('\r\n')
         f.write('Sendo composto por:\r\n')
+        f.write('\r\n')
         f.write('#1. Empresa: {}\r\n'.format(self.Company))
         f.write('#2. Número de referência: {}\r\n'.format(self.ProtocolNumber))
         f.write('#3. Território de Abrangência: {}\r\n'.format(self.Basin))
@@ -95,31 +133,38 @@ class Products():
         f.write('#5. Data de aquisição: {}\r\n'.format(self.today))
         f.write('#6. Tema do mapeamento (exemplo): {}\r\n'.format(self.PointName))
         f.write('#7. Referencias adicionais (exemplos):\r\n')
+        f.write('\r\n')
 
         for key in keys:
             val = self.EfluentType[key]
-            f.write('\t\t- {}\t\t\t\t\t: {}\r\n'.format(key,val))
-
+            f.write('\t\t\t- {}\t\t\t: {}\r\n'.format(key,val))
+        f.write('\r\n')
         f.write('\t\t\t- PROB\t\t\t\t: CENARIO PROBABILISTICO;\r\n \
-\t\t\t- DET\t\t\t\t: CENARIO DETERMINISTICOS;\r\n\r\n\t\t\t- VER\t\t\t\t\: SAZON\
-ALIDADE SIMULADA DE VERÃO 	(janeiro a março);\r\n\t\t- OUT\t\t\t\t: SAZONALIDAD\
-E SIMULADA DE OUTONO 	(abril a junho);\r\n\t\t- INV\t\t\t\t: SAZONALIDADE SIMU\
-LADA DE INVERNO 	(julho a setembro);\r\n\t\t- PRI\t\t\t\t: SAZONALIDADE SIMUL\
-ADA DE PRIMAVERA 	(outubro a dezembro);\r\n\r\n\t\t- DILUI\t\t\t\t: SHAPE DETE\
-RMINISTICO DO CENÁRIO DE MENOR DILUIÇÃO DA PLUMA;\r\n\t\t- DIST\t\t\t\t: SHAPE D\
-ETERMINISTICO DO CENÁRIO DE MAIOR DISTÂNCIA ATINGIDA PELA PLUMA;\r\n\t\t- Instan\
-te\t\t\t: PLUMA DO EFLUENTE NO INSTANTE FINAL DO DERRAME;\r\n\t\t- Area\t\t\t\t: \
+\t\t\t- DET\t\t\t\t: CENARIO DETERMINISTICOS;\r\n\r\n\t\t\t- VER\t\t\t\t: SAZON\
+ALIDADE SIMULADA DE VERÃO 	(janeiro a março);\r\n\t\t\t- OUT\t\t\t\t: SAZONALIDAD\
+E SIMULADA DE OUTONO 	(abril a junho);\r\n\t\t\t- INV\t\t\t\t: SAZONALIDADE SIMU\
+LADA DE INVERNO 	(julho a setembro);\r\n\t\t\t- PRI\t\t\t\t: SAZONALIDADE SIMUL\
+ADA DE PRIMAVERA 	(outubro a dezembro);\r\n\r\n\t\t\t- DILUI\t\t\t\t: SHAPE DETE\
+RMINISTICO DO CENÁRIO DE MENOR DILUIÇÃO DA PLUMA;\r\n\t\t\t- DIST\t\t\t\t: SHAPE D\
+ETERMINISTICO DO CENÁRIO DE MAIOR DISTÂNCIA ATINGIDA PELA PLUMA;\r\n\t\t\t- Instan\
+te\t\t\t: PLUMA DO EFLUENTE NO INSTANTE FINAL DO DERRAME;\r\n\t\t\t- Area\t\t\t\t: \
 ÁREA DE DESLOCAMENTO DA PLUMA DO EFLUENTE AO LONGO DA SIMULAÇÃO DETERMINISTICA;\r\n\
 \r\n---------------------------------------------------------------------------')
+        f.write('\r\n')
+        f.write('\r\n')
         f.write('As SUB_PASTAS (citadas acima) contêm:\r\n')
+        f.write('\r\n')
         f.write('#1 (.dbf)\r\n')
         f.write('#2 (.prj)\r\n')
         f.write('#3 (.shp)\r\n')
         f.write('#4 (.shx)\r\n')
         f.write('___________________________________________________________________________')
         f.write('\r\n')
+        f.write('\r\n')
         f.write('#1 PROBABILISTICOS\r\n')
+        f.write('\r\n')
         f.write('referência adicionais da tabela de atributos dos shapes:\r\n')
+        f.write('\r\n')
         f.write('prob_min 	: Probabilidade total na coluna da água em porcentagem (%) associada pluma de diluição mínima;\r\n')
         f.write('prob_med 	: Probabilidade total na coluna da água em porcentagem (%) associada a pluma de diluição média,\r\n')
         f.write('\t\tvalores iguais a -99999 correspondem a valores extrapolados no processamento;\r\n\r\n')
@@ -129,20 +174,23 @@ te\t\t\t: PLUMA DO EFLUENTE NO INSTANTE FINAL DO DERRAME;\r\n\t\t- Area\t\t\t\t:
         f.write('\r\n')
         f.write('Topologia dos arquivos : Poligono')
         f.write('\r\n')
-        f.write('\r\n')
         f.write('___________________________________________________________________________')
         f.write('\r\n')
+        f.write('\r\n')
         f.write('#2 DETERMINISTICOS\r\n')
+        f.write('\r\n')
         f.write('referência adicionais da tabela de atributos dos shapes:\r\n')
+        f.write('\r\n')
         f.write('No shape de INSTANTE FINAL (Instante):\r\n')
         f.write('dilui : Diluição mínima do efluente na coluna da água em número de vezes (x) (ex.: 2489,0 vezes) no instante final do derrame;\r\n\r\n')
+        f.write('\r\n')
         f.write('No shape de ÁREA DE DESLOCAMENTO (Area):\r\n')
         f.write('dilui : Valores de diluição criticos do efluente registrada para cada célula, ao longo de toda a simulação;\r\n')
         f.write('\r\n')
         f.write('Topologia dos arquivos : Poligono')
         f.write('\r\n')
-        f.write('\r\n')
         f.write('___________________________________________________________________________')
+        f.write('\r\n')
         f.write('\r\n')
         f.write('Todos os shapes estão georeferenciados no Sistema de Coordenadas Geográficas DATUM Sirgas2000.')
         f.write('\r\n')
@@ -159,10 +207,6 @@ te\t\t\t: PLUMA DO EFLUENTE NO INSTANTE FINAL DO DERRAME;\r\n\t\t- Area\t\t\t\t:
         return nfilename
 
     def PrepareSeawageProducts(self):
-
-        DirsNames = ['A_Documentos','B_Ilustracoes','C_Shapes']
-        for prop in DirsNames:
-            setattr(self,prop[2:],os.path.join(self.path,'Produtos/'+prop))
 
         IgnPerfis = shutil.ignore_patterns('PERFIS','*.db')
         IgnDocs = shutil.ignore_patterns('*uperados','*.docx','*.db')
@@ -185,18 +229,6 @@ te\t\t\t: PLUMA DO EFLUENTE NO INSTANTE FINAL DO DERRAME;\r\n\t\t- Area\t\t\t\t:
 
         shutil.copy('../Figuras/Localizacao.png',self.Ilustracoes)
 
-        self.today = datetime.today().strftime('%Y_%m_%d')
-        year = datetime.today().strftime('%Y')
-        self.Tt = 'TetraTech'
-
-        self.prefix='_'.join([
-                        self.Company,
-                        self.ProtocolNumber,
-                        self.Basin,
-                        self.Tt,self.today,
-                        self.PointName,
-                        'Efl'
-                        ])
 
         filenames = glob(self.Ilustracoes+'/**/*.png',recursive=True)
         filenames.extend(glob(self.Shapes+'/**/*.shp',recursive=True))
@@ -210,7 +242,7 @@ te\t\t\t: PLUMA DO EFLUENTE NO INSTANTE FINAL DO DERRAME;\r\n\t\t- Area\t\t\t\t:
             nfilename=nfilename.replace('VARRIDA','Area')
             nfilename=nfilename.replace('AGPROD','AgProd')
             nfilename=nfilename.replace('DET_D','DET_Instante_D')
-            nfilename=nfilename.replace('FUT_',year+'_')
+            nfilename=nfilename.replace('FUT_',self.year+'_')
             nfilename=nfilename.replace('DILUIMIN','DILUI')
             nfilename=nfilename.replace('DISTMAX','DIST')
             nfilename=nfilename.replace('OVERBOARD','Overboard')
