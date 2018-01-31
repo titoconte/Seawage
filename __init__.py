@@ -3,3 +3,4 @@
 #from TTutils.TidalPrediction import *
 from .SIG import *
 from .NearField import NearField
+from .Products import Products
