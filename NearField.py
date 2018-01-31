@@ -13,6 +13,8 @@ from mpl_toolkits.mplot3d import axes3d
 from PIL import Image
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from TTutils.logo import *
+from collections import OrderedDict
+import matplotlib.colors as colors
 
 sns.set_style("whitegrid", {
 	                         'grid.color'    : ".5",
@@ -39,7 +41,8 @@ class NearField():
 				ScenarioName,
 				DischageDepth=None,
 				RefDepth=1000,
-				Concentration=False):
+				Concentration=False,
+				CormixOutDatapath='c:/Program Files (x86)/CORMIX 8.0/System/'):
 
 		if Concentration:
 			self._Property='C'
@@ -109,16 +112,17 @@ class NearField():
 		return df
 
 	@staticmethod
-	def CalculatesB(df,RefDepth):
+	def CalculatesB(df,RefDepth,ZeroCut=True):
 		# calculates the B values
 		df['BVinf']=df['Z']+df['BV']
 		df['BVsup']=df['Z']-df['BV']
 
 		# check what goes above surface ou bellow the floor
 		out = df['BVinf'].values-RefDepth
-		out[out<0]=0
 		sup = df['BVsup'].values*1.
-		sup[sup>0]=0
+		if ZeroCut:
+			out[out<0]=0
+			sup[sup>0]=0
 
 		# Put B values to other B if necessary
 		df['BVsup']-=out
@@ -141,6 +145,16 @@ class NearField():
 		df.index=df.index.astype(float)
 		return df
 
+	@staticmethod
+	def ThetaCalc(df):
+
+		Xdiff = df['X'].diff().values
+		Ydiff = df['Y'].diff().values
+		df['theta'] = np.arctan2(Xdiff,Ydiff)
+		df['theta'][0]=0
+
+		return df
+
 	def ReadNearFieldFiles(self,**kwargs):
 
 		nf=[]
@@ -158,7 +172,10 @@ class NearField():
 
 		df = concat(nf)
 
+		df = self.ThetaCalc(df)
+
 		df = df.pipe(self.InterpolateNearField)
+
 
 		if not self._RefDepth:
 			self._RefDepth = df.loc[:,'Z'].max()
@@ -170,12 +187,13 @@ class NearField():
 		df.drop_duplicates('Dist',inplace=True)
 
 		df = df.pipe(self.CorrectsZ,RefDepth=self._RefDepth)
+
 		if not self._DischageDepth:
-			self._DischageDepth=df['Z'].loc[0]
+			self._DischageDepth=df['Z'].iloc[0]
 
 		df = df.pipe(self.CalculatesB,RefDepth=self._RefDepth)
 
-		df = df.apply(WindowFilter,WindowSize=100)
+		df.iloc[1:,:] = df.iloc[1:,:].apply(WindowFilter)
 
 		self.df=df
 
@@ -216,12 +234,14 @@ class NearField():
 		ax2.plot(self.df['Dist'],self.df['BVsup'].values,**kwargs)
 		ax2.plot(self.df['Dist'],self.df['BVinf'].values,**kwargs)
 
+		Yel=np.sin(self.df['theta'].values)
+
 		ax3.plot(self.df['X'].values,
-				self.df['Y'].values+self.df['BH'].values,
+				self.df['Y'].values+self.df['BH'].values*Yel,
 				**kwargs)
 
 		ax3.plot(self.df['X'].values,
-				self.df['Y'].values-self.df['BH'].values,
+				self.df['Y'].values-self.df['BH'].values*Yel,
 				**kwargs)
 
 		axis=[ax1,ax2,ax3]
@@ -230,94 +250,86 @@ class NearField():
 			return [figs,axis]
 		else:
 			return axis
-
-	def Plot3D(self,
+	@staticmethod
+	def Plot3D(df,
 				fname=None,
+				Property='S',
 				angle1=30,
 				angle2=150,
 				LongInterp=1000,
-				LateralInterp=25):
+				LateralInterp=25,
+				Dissolution=True,
+				CMpallete=plt.cm.jet_r,
+				autoscale=True,
+				floor=None,
+				**kwargs
+				):
 
-		n=self.df.shape[0]
+		if 'xlabel' not in kwargs.keys():
+			xlabel = u'direção paralela \n a corrente (m)'
+		else:
+			xlabel=kwargs['xlabel']
+		if 'ylabel' not in kwargs.keys():
+			ylabel = u'direção perpendicular \n a corrente (m)'
+		else:
+			ylabel=kwargs['ylabel']
+		if 'zlabel' not in kwargs.keys():
+			zlabel = u'profundidade (m)'
+		else:
+			zlabel=kwargs['zlabel']
+		if 'BarLabel' not in kwargs.keys():
+			BarLabel = u'diluição (vezes)'
+		else:
+			BarLabel=kwargs['BarLabel']
 
-		idx = list(np.linspace(0,n-1,LongInterp))
+		N=df.shape[0]
+
+		idx = list(np.linspace(0,N-1,LongInterp))
 		idx = list(map(int,idx))
-		PlotDF=self.df.iloc[idx,:]
-		PlotDF['X'].iloc[0]=0
-		PlotDF['Y'].iloc[0]=0
-		PlotDF['BV'].iloc[0]=0
-		PlotDF['BX'].iloc[0]=0
-		PlotDF['BY'].iloc[0]=0
+		PlotDF=df.iloc[idx,:]
+		PlotDF['X'][0]=0
+		PlotDF['Y'][0]=0
+		PlotDF['BV'][0]=0
+		PlotDF['BX'][0]=0
+		PlotDF['BY'][0]=0
+
+		N=PlotDF['X'].shape[0]
 
 		filter = signal.get_window(('gaussian',LateralInterp),LateralInterp)
-
 		GridX,_ = np.meshgrid(PlotDF['X'],filter)
 		GridY,_ = np.meshgrid(PlotDF['Y'],filter)
-		GridZ,_= np.meshgrid(PlotDF['Z'],filter)
+		GridZ,_ = np.meshgrid(PlotDF['Z'],filter)
 		thetagrid = np.linspace(0,np.pi*2,len(filter))
-		GridDissolution,_ = np.meshgrid(PlotDF[self._Property],filter)
+		GridDissolution,_ = np.meshgrid(PlotDF[Property],filter)
+		#GridDissolution=GridDissolution.T
+		# TampaX=np.meshgrid(np.ones(N)*PlotDF['X'].iloc[-1],filter)[0]
+		# TampaY=np.meshgrid(np.ones(N)*PlotDF['Y'].iloc[-1],filter)[0]
+		# TampaZ=np.meshgrid(np.ones(N)*PlotDF['Z'].iloc[-1],filter)[0]
 
-		for i in range(GridX.shape[1]):
+
+
+		for i in range(N):
 		    GridX[:,i]+= np.cos(thetagrid)*(PlotDF.loc[:,'BX'].iloc[i])
 		    GridY[:,i]+= np.cos(thetagrid)*(PlotDF.loc[:,'BY'].iloc[i])
-		    GridZ[:,i]+=np.sin(thetagrid)*(PlotDF.loc[:,'BV'].iloc[i])
-
-		xmax = max(GridX)
-		ymax = max(GridY)
-		zmax = max(GridZ)
-		xmin = min(GridX)
-		ymin = min(GridY)
-		zmin = min(GridZ)
-
-		if zmin<3:
-			zmin=-5
-
-		xdist = xmax-xmin
-		ydist = ymax-ymin
-		zdist = zmax-zmin
-
-		if xdist >= ydist > zdist:
-			xydif = (xdist-ydist)/2
-			ymin-=xydif
-			ymax+=xydif
-
-			xzdif = (xdist-zdist)/2
-			zmin-=xzdif
-			zmax+=xzdif
-			if zmin<-5:
-				zbase=zmin+5
-				zmin-=zbase
-				zmax+=zbase
-
-		elif xdist <= ydist < zdist:
-			xydif = (zdist-xdist)/2
-			xmin-=xydif
-			xmax+=xydif
-			xydif = (zdist-ydist)/2
-			ymin-=xydif
-			ymax+=xydif
-
-		elif ydist >= xdist > zdist:
-			xydif = (ydist-xdist)/2
-			xmin-=xydif
-			xmax+=xydif
-
-			yzdif = (ydist-zdist)/2
-			zmin-=yzdif
-			zmax+=yzdif
-			if zmin<-5:
-				zbase=zmin+5
-				zmin-=zbase
-				zmax+=zbase
-
-
-
-
+		    if floor:
+		    	if PlotDF['Z'].iloc[i]>floor:
+		    		GridZ[:,i]=floor
+		    	else:
+		    		GridZ[:,i]+=np.sin(thetagrid)*(PlotDF.loc[:,'BV'].iloc[i])
+		    else:
+		    	GridZ[:,i]+=np.sin(thetagrid)*(PlotDF.loc[:,'BV'].iloc[i])
+		    # TampaX[:,i]+= np.cos(thetagrid)*(PlotDF.loc[:,'BX'].iloc[-1])*fac
+		    # TampaY[:,i]+= np.cos(thetagrid)*(PlotDF.loc[:,'BY'].iloc[-1])*fac
+		    # TampaZ[:,i]+= np.sin(thetagrid)*(PlotDF.loc[:,'BV'].iloc[-1])*fac
 
 
 		GridZ[GridZ<0]=0
-		n=GridDissolution/GridDissolution.max()
+		n=GridDissolution
+		if Dissolution:
+			n=n/GridDissolution.max()
 		vmax=GridDissolution.max()
+
+		cm = CMpallete(n)
 
 		fig = plt.figure()
 		ax = fig.add_subplot(111,
@@ -327,7 +339,7 @@ class NearField():
 		surf = ax.plot_surface(GridX,
 		                       GridY,
 		                       GridZ,
-		                       facecolors=plt.cm.jet_r(n),
+		                       facecolors=cm,
 		                       linewidth=0.5,
 		                       rstride=1,
 		                       cstride=1,
@@ -337,19 +349,91 @@ class NearField():
 		                       vmax=vmax
 		                        )
 		ax.invert_zaxis()
-		m = plt.cm.ScalarMappable(cmap=plt.cm.jet_r)
+		m = plt.cm.ScalarMappable(cmap=CMpallete)
 		m.set_clim(0,vmax)
-		m.set_array(GridDissolution)
+		m.set_array(GridDissolution*100)
 		cbar  = plt.colorbar(m,pad=0.1)
 		cbar.set_clim(0,vmax)
-		cbar.set_label(U'diluição (vezes)',fontsize=8)
-		cbar.set_ticklabels(list(map(str,list(np.arange(0,1,0.1)*int(vmax)))))
-		ax.set_xlabel(u'direção paralela \n a corrente (m)',fontsize=8)
-		ax.set_ylabel(u'direção perpendicular \n a corrente (m)',fontsize=8)
-		ax.set_zlabel(u'profundidade (m)',fontsize=8,rotation=0)
+		cbar.set_label(BarLabel,fontsize=8)
+		if 'CbarTicks' in kwargs.keys():
+			cbar.ax.set_yticklabels(kwargs['CbarTicks'])
+		else:
+			cbar.ax.set_yticklabels(list(map(str,list(np.arange(0,1,0.1)*int(vmax)))))
+
+		ax.set_xlabel(xlabel,fontsize=8)
+		ax.set_ylabel(ylabel,fontsize=8)
+		ax.set_zlabel(zlabel,fontsize=8)
 		ax.view_init(angle1, angle2)
 
-		ax.auto_scale_xyz([xmin, xmax], [ymin, ymax], [zmin, 75])
+		if 'xmax' not in kwargs.keys():
+			xmax = max(GridX)
+		else:
+			xmax=kwargs['xmax']
+		if 'ymax' not in kwargs.keys():
+			ymax = max(GridY)
+		else:
+			ymax=kwargs['ymax']
+		if 'zmax' not in kwargs.keys():
+			zmax = max(GridZ)
+		else:
+			zmax=kwargs['zmax']
+		if 'xmin' not in kwargs.keys():
+			xmin = min(GridX)
+		else:
+			xmin=kwargs['xmin']
+		if 'ymin' not in kwargs.keys():
+			ymin = min(GridY)
+		else:
+			ymin=kwargs['ymin']
+		if 'zmin' not in kwargs.keys():
+			zmin = min(GridZ)
+			if zmin<3:
+				zmin=-5
+		else:
+			zmin=kwargs['zmin']
+
+		if autoscale:
+
+			xdist = xmax-xmin
+			ydist = ymax-ymin
+			zdist = zmax-zmin
+
+			if xdist >= ydist > zdist:
+				xydif = (xdist-ydist)/2
+				ymin-=xydif
+				ymax+=xydif
+
+				xzdif = (xdist-zdist)/2
+				zmin-=xzdif
+				zmax+=xzdif
+				if zmin<-5:
+					zbase=zmin+5
+					zmin-=zbase
+					zmax+=zbase
+
+			elif xdist <= ydist < zdist:
+				xydif = (zdist-xdist)/2
+				xmin-=xydif
+				xmax+=xydif
+				xydif = (zdist-ydist)/2
+				ymin-=xydif
+				ymax+=xydif
+
+			elif ydist >= xdist > zdist:
+				xydif = (ydist-xdist)/2
+				xmin-=xydif
+				xmax+=xydif
+
+				yzdif = (ydist-zdist)/2
+				zmin-=yzdif
+				zmax+=yzdif
+				if zmin<-5:
+					zbase=zmin+5
+					zmin-=zbase
+					zmax+=zbase
+
+		ax.auto_scale_xyz([xmin, xmax], [ymin, ymax], [zmin, zmax])
+
 
 		a = plt.axes([.02, .02, .15, .15], facecolor='None')
 		im = plt.imshow(np.array(Image.open(GetLogo())))
@@ -359,4 +443,5 @@ class NearField():
 			plt.show()
 		else:
 			fig.savefig(fname+'_3dplot.png',dpi=300)
-		plt.close(fig)
+			plt.close(fig)
+		return GridDissolution
