@@ -24,9 +24,12 @@ class Products():
             'Efl_AgProd':'EFLUENTE DE ÁGUA PRODUZIDA - VAZÃO CORRESPONDENTE À CAPACIDADE DE TRATAMENTO DA UNIDADE;',
             'Efl_AgProd80':'EFLUENTE DE ÁGUA PRODUZIDA - VAZÃO CORRESPONDENTE À 80% DA CAPACIDADE DE TRATAMENTO DA UNIDADE;',
             'Efl_AgProd'+self.year:'EFLUENTE DE ÁGUA PRODUZIDA - VAZÃO CORRESPONDENTE À GERAÇÃO ESTIMADA PARA '+self.year,
-            'Efl_SLOP':'EFLUENTE DE DESCARTE VIA TANQUE SLOP;',
-            'Efl_Overboard':'EFLUENTE DE DESCARTE POR OVERBOARD;',
+            'Efl_SLOP':'EFLUENTE DA LAVAGEM DE MEMBRANAS DESCARTADO VIA TANQUE SLOP;',
+            'Efl_Overboard':'EFLUENTE DA LAVAGEM DE MEMBRANAS DESCARTADO POR OVERBOARD;',
             'Efl_URS':'EFLUENTE DE DESCARTE DA URS;',
+            'Efl_MEMB':'EFLUENTE DA LAVAGEM DE MEMBRANAS VIA TUBULAÇÃO DA URS;',
+            'Efl_PermDec':'EFLUENTE PERMEADO DE VAZÃO DECRESCENTE;',
+            'Efl_PermCont':'EFLUENTE PERMEADO DE VAZÃO CONTÍNUA;',
             }
 
 
@@ -241,6 +244,10 @@ te\t\t\t: PLUMA DO EFLUENTE NO INSTANTE FINAL DO DERRAME;\r\n\t\t\t- Area\t\t\t\
 
             nfilename=nfilename.replace('VARRIDA','Area')
             nfilename=nfilename.replace('AGPROD','AgProd')
+            nfilename=nfilename.replace('PERMDEC','PermDec')
+            nfilename=nfilename.replace('PERMCONT','PermCont')
+            nfilename=nfilename.replace('PERM_DEC','PermDec')
+            nfilename=nfilename.replace('PERM_CONT','PermCont')
             nfilename=nfilename.replace('DET_D','DET_Instante_D')
             nfilename=nfilename.replace('FUT_',self.year+'_')
             nfilename=nfilename.replace('DILUIMIN','DILUI')
